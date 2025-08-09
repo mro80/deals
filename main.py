@@ -119,4 +119,4 @@ def main():
             print("Fetch error:", e)
             traceback.print_exc()
             send_discord(f"⚠️ خطأ أثناء جلب العروض: {e}")
-        time.sleep(900)
+        time.sleep(300)
