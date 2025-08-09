@@ -101,12 +101,9 @@ def get_deals_auto():
     raise RuntimeError(f"All endpoints failed. Last: {last_error}")
 
 def main():
-    try:
-        # إرسال إشعار بدء التشغيل
-        send_discord(f"✅ البوت اشتغل ويبحث عن الخصومات (>{MIN_DISCOUNT}%)")
-        print("تم إرسال إشعار التشغيل إلى Discord")
-    except Exception as e:
-        print("❌ خطأ أثناء إرسال إشعار التشغيل:", e)
+    # إشعار بدء التشغيل (يرسل حتى لو صار خطأ لاحقًا)
+    send_discord(f"✅ البوت اشتغل ويبحث عن الخصومات (≥{MIN_DISCOUNT}%).")
+    print(">>> Startup ping sent")
 
     seen = set()
     while True:
@@ -120,7 +117,13 @@ def main():
                 if d["id"] in seen:
                     continue
 
-                msg = f"🎮 **{d['title']}**\n💲 السعر: {d['amount']} {d['currency']}\n✂ الخصم: {d['cut']}%\n🏬 المتجر: {d['shop']}\n🔗 {d['url']}"
+                msg = (
+                    f"🎮 **{d['title']}**\n"
+                    f"📉 خصم: {d['cut']}%\n"
+                    f"🏪 المتجر: {d['shop']}\n"
+                    f"💰 السعر: {d['amount']} {d['currency']}\n"
+                    f"🔗 {d['url']}"
+                )
                 send_discord(msg)
                 seen.add(d["id"])
 
@@ -129,5 +132,4 @@ def main():
             traceback.print_exc()
             send_discord(f"⚠️ خطأ أثناء جلب العروض: {e}")
 
-        time.sleep(300)  # 5 دقائق
-
+        time.sleep(300)  # كل 5 دقايق
