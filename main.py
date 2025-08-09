@@ -11,12 +11,12 @@ MIN_DISCOUNT = 15  # أقل نسبة خصم للتنبيه
 
 # فحص المتغيرات الأساسية
 if not ITAD_API_KEY or not DISCORD_WEBHOOK_URL:
-    print("❌ مفقود:", "ITAD_API_KEY" if not ITAD_API_KEY else "", 
+    print("❌ مفقود:", "ITAD_API_KEY" if not ITAD_API_KEY else "",
           "DISCORD_WEBHOOK_URL" if not DISCORD_WEBHOOK_URL else "")
     sys.exit(1)
 
 def send_discord(text: str):
-    """يرسل رسالة نصية لقناة الديسكورد عبر الويب هوك ويطبع حالة الاستجابة."""
+    """يرسل رسالة نصية لقناة الديسكورد ويطبع حالة الاستجابة."""
     try:
         r = requests.post(DISCORD_WEBHOOK_URL, json={"content": text}, timeout=15)
         print("Discord status:", r.status_code, r.text[:200])
@@ -26,29 +26,40 @@ def send_discord(text: str):
         return None
 
 def get_deals():
-    """يجلب قائمة العروض من IsThereAnyDeal ويعيدها كقائمة (قد تكون فاضية)."""
-    url = "https://api.isthereanydeal.com/v01/deals/list/"
+    """
+    يجلب قائمة العروض من API الجديد:
+    GET https://api.isthereanydeal.com/deals/v2
+    أهم البراميترات:
+      - key     : API key
+      - country : رمز الدولة
+      - limit   : عدد النتائج
+      - sort    : -cut (أعلى خصم أولاً)
+      - nondeals: لا تعرض العناصر اللي ما عليها خصم
+    """
+    url = "https://api.isthereanydeal.com/deals/v2"
     params = {
         "key": ITAD_API_KEY,
-        "region": "us",
         "country": "US",
-        "sort": "cut:desc",
-        "cut": MIN_DISCOUNT,
+        "limit": 50,
+        "sort": "-cut",      # أعلى خصم أولاً
+        "nondeals": False,
+        "mature": False
     }
     r = requests.get(url, params=params, timeout=20)
     r.raise_for_status()
     data = r.json()
-    # البنية الشائعة: {"data": {"list": [...]}}
-    return data.get("data", {}).get("list", [])
+    # البنية الجديدة: {"list":[{ "title":..., "deal": { "price":{...}, "shop":{...}, "url":... }, ...}], ...}
+    return data.get("list", [])
 
-def format_msg(d):
-    title = d.get("title") or d.get("game", {}).get("title", "Unknown")
-    price = d.get("price", {})
+def format_msg(item):
+    deal = item.get("deal", {}) or {}
+    title = item.get("title", "Unknown")
+    shop = (deal.get("shop") or {}).get("name")
+    price = deal.get("price") or {}
     cut = price.get("cut")
     amount = price.get("amount")
     curr = price.get("currency")
-    shop = d.get("shop", {}).get("name")
-    url = d.get("urls", {}).get("buy") or d.get("urls", {}).get("game") or ""
+    url = deal.get("url") or ""
     return f"🎮 **{title}**\n📉 خصم: {cut}%\n🏪 المتجر: {shop}\n💰 السعر: {amount} {curr}\n🔗 {url}"
 
 def main():
@@ -60,27 +71,38 @@ def main():
         try:
             deals = get_deals()
             print(f"Got {len(deals)} deals")
-            for d in deals:
-                price_cut = d.get("price", {}).get("cut")
-                if price_cut is None or price_cut < MIN_DISCOUNT:
+            for item in deals:
+                # استخراج نسبة الخصم
+                cut = ((item.get("deal") or {}).get("price") or {}).get("cut")
+                if cut is None or cut < MIN_DISCOUNT:
                     continue
-                deal_id = d.get("plain") or f"{d.get('title')}-{d.get('shop',{}).get('name')}-{price_cut}"
+
+                # معرّف فريد للعرض لمنع التكرار
+                deal_id = item.get("id") or f"{item.get('title')}-{cut}-{(item.get('deal') or {}).get('url','')}"
+
                 if deal_id in seen:
                     continue
-                msg = format_msg(d)
+
+                msg = format_msg(item)
                 send_discord(msg)
                 seen.add(deal_id)
+
         except requests.HTTPError as e:
             # أخطاء HTTP من API
-            print("HTTP error:", e, getattr(e, "response", None) and getattr(e.response, "text", "")[:200])
+            body = ""
+            try:
+                body = e.response.text[:200]
+            except Exception:
+                pass
+            print("HTTP error:", e, body)
             send_discord(f"⚠️ خطأ من API: {e}")
         except Exception as e:
             print("Unhandled error:", e)
             traceback.print_exc()
             send_discord(f"⚠️ صار خطأ غير متوقع: {e}")
+
         # افحص كل 15 دقيقة
         time.sleep(900)
 
 if __name__ == "__main__":
     main()
-
