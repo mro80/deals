@@ -1,9 +1,10 @@
 import requests
 import time
+import os  # نضيف استيراد مكتبة os
 
-# إعداداتك
-ITAD_API_KEY = "d5e970f16df8bd33a7bd7ec04db52b07f68e910b"
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1403531109899305041/qfpZlcbh9d75B30tELnbWFEr3IPxJbPD1c_338cwnFIL_7G4dR01sFr4FerkOfBrVKpj"
+# إعدادات - نقرأ من متغيرات البيئة
+ITAD_API_KEY = os.environ["ITAD_API_KEY"]
+DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 MIN_DISCOUNT = 15  # أقل خصم للتنبيه
 
 def get_deals():
