@@ -1,76 +1,87 @@
 import os
-import sys
 import time
-import traceback
 import requests
+import feedparser
+import re
 
-print(">>> booting", flush=True)
-print(">>> imports ok", flush=True)
-
-# قراءة القيم من المتغيرات البيئية
-ITAD_API_KEY = os.environ.get("ITAD_API_KEY")
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
+# الإعدادات
+DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 MIN_DISCOUNT = 15  # أقل نسبة خصم
 
-# إرسال رسالة إلى الديسكورد
-def send_discord(content):
-    try:
-        r = requests.post(DISCORD_WEBHOOK_URL, json={"content": content}, timeout=15)
-        print(f"Discord status: {r.status_code} {r.text[:200]}", flush=True)
-    except Exception as e:
-        print(f"❌ Discord send failed: {e}", flush=True)
+# رابط RSS من موقع IsThereAnyDeal (حدد الدولة لو حاب)
+RSS_URL = "https://isthereanydeal.com/rss/?country=US"
 
-# جلب العروض
+def send_discord(message):
+    """يرسل رسالة إلى قناة الديسكورد عبر Webhook"""
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json={"content": message})
+        print(f"Discord status: {resp.status_code}")
+    except Exception as e:
+        print(f"❌ خطأ أثناء إرسال رسالة للديسكورد: {e}")
+
+def parse_cut_from_title(title):
+    """يحاول استخراج نسبة الخصم من العنوان"""
+    m = re.search(r'(-?\d+)\s*%', title)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except:
+        return None
+
 def get_deals_auto():
-    url = f"https://api.isthereanydeal.com/v01/deals/list/"
-    params = {
-        "key": ITAD_API_KEY,
-        "region": "us",
-        "country": "US",
-        "sort": "cut:desc",
-        "cut": MIN_DISCOUNT
-    }
-    resp = requests.get(url, params=params)
-    if resp.status_code == 200:
-        data = resp.json()
-        return data.get("data", {}).get("list", [])
-    else:
-        print(f"❌ HTTP error: {resp.status_code} - {resp.text[:200]}", flush=True)
-        return []
+    """يجلب العروض من RSS ويحولها لقائمة موحدة"""
+    feed = feedparser.parse(RSS_URL)
+    items = []
+    for e in feed.entries:
+        title = e.title
+        link = e.link
+        cut = parse_cut_from_title(title)
+        deal_id = getattr(e, "id", None) or link or title
+        items.append({
+            "title": title,
+            "cut": cut,
+            "amount": None,
+            "currency": "",
+            "shop": "",
+            "url": link,
+            "id": deal_id
+        })
+    return "rss", items
 
 def main():
-    print(">>> entered main()", flush=True)
-    
-    # Ping عند بدء التشغيل
     try:
-        send_discord(f"✅ البوت بدأ التشغيل — سيعرض الخصومات {MIN_DISCOUNT}%+")
+        send_discord(f"✅ البوت تشتغل ويبلغ الخصومات (≥{MIN_DISCOUNT}%)")
+        print("تم إرسال إشعار تشغيل البوت")
     except Exception as e:
-        print("❌ فشل إرسال Ping:", e, flush=True)
+        print("❌ خطأ أثناء إرسال إشعار التشغيل:", e)
 
     seen = set()
-
     while True:
         try:
-            deals = get_deals_auto()
-            print(f"Got {len(deals)} deals", flush=True)
+            endpoint_key, deals = get_deals_auto()
+            print(f"Using endpoint: {endpoint_key} | Got {len(deals)} deals")
 
             for d in deals:
-                if d["cut"] is None or d["cut"] < MIN_DISCOUNT or not d["urls"]["buy"]:
+                if d["cut"] is None or d["cut"] < MIN_DISCOUNT or not d["url"]:
                     continue
                 if d["id"] in seen:
                     continue
 
-                msg = f"🎮 **{d['title']}**\nخصم: {d['cut']}%\nالمتجر: {d['shop']['name']}\n💰 السعر: {d['price']['amount']} {d['price']['currency']}\n🔗 {d['urls']['buy']}"
+                msg = (
+                    f"🎮 **{d['title']}**\n"
+                    f"📉 خصم: {d['cut']}%\n"
+                    f"🔗 {d['url']}"
+                )
                 send_discord(msg)
                 seen.add(d["id"])
 
         except Exception as e:
-            print(f"⚠ Fetch error: {e}", flush=True)
-            traceback.print_exc()
-            send_discord(f"⚠ خطأ أثناء جلب العروض: {e}")
+            print(f"⚠ Fetch error: {e}")
+            send_discord(f"⚠ مشكلة أثناء جلب العروض: {e}")
 
-        time.sleep(300)  # 5 دقائق
+        time.sleep(300)  # كل 5 دقائق
 
 if __name__ == "__main__":
-    print(">>> calling main()", flush=True)
+    print(">>> booting")
     main()
