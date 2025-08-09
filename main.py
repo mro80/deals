@@ -101,22 +101,33 @@ def get_deals_auto():
     raise RuntimeError(f"All endpoints failed. Last: {last_error}")
 
 def main():
-    send_discord(f"🚀 البوت اشتغل ويتابع الخصومات (≥{MIN_DISCOUNT}%).")
+    try:
+        # إرسال إشعار بدء التشغيل
+        send_discord(f"✅ البوت اشتغل ويبحث عن الخصومات (>{MIN_DISCOUNT}%)")
+        print("تم إرسال إشعار التشغيل إلى Discord")
+    except Exception as e:
+        print("❌ خطأ أثناء إرسال إشعار التشغيل:", e)
+
     seen = set()
     while True:
         try:
             endpoint_key, deals = get_deals_auto()
-            print(f"Using endpoint: {endpoint_key} | Got {len(deals)}")
+            print(f"Using endpoint: {endpoint_key} | Got {len(deals)} deals")
+
             for d in deals:
                 if d["cut"] is None or d["cut"] < MIN_DISCOUNT or not d["url"]:
                     continue
-                if d["id"] in seen: 
+                if d["id"] in seen:
                     continue
-                msg = f"🎮 **{d['title']}**\n📉 خصم: {d['cut']}%\n🏪 المتجر: {d['shop']}\n💰 السعر: {d['amount']} {d['currency']}\n🔗 {d['url']}"
+
+                msg = f"🎮 **{d['title']}**\n💲 السعر: {d['amount']} {d['currency']}\n✂ الخصم: {d['cut']}%\n🏬 المتجر: {d['shop']}\n🔗 {d['url']}"
                 send_discord(msg)
                 seen.add(d["id"])
+
         except Exception as e:
-            print("Fetch error:", e)
+            print("⚠️ Fetch error:", e)
             traceback.print_exc()
             send_discord(f"⚠️ خطأ أثناء جلب العروض: {e}")
-        time.sleep(300)
+
+        time.sleep(300)  # 5 دقائق
+
