@@ -9,7 +9,7 @@ DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 MIN_DISCOUNT = 15  # أقل نسبة خصم
 
 # رابط RSS من موقع IsThereAnyDeal (حدد الدولة لو حاب)
-RSS_URL = "https://isthereanydeal.com/rss/?country=US"
+RSS_URL = "https://isthereanydeal.com/rss/?country=Sa"
 
 def send_discord(message):
     """يرسل رسالة إلى قناة الديسكورد عبر Webhook"""
@@ -80,7 +80,7 @@ def main():
             print(f"⚠ Fetch error: {e}")
             send_discord(f"⚠ مشكلة أثناء جلب العروض: {e}")
 
-        time.sleep(300)  # كل 5 دقائق
+        time.sleep(120)  # كل 5 دقائق
 
 if __name__ == "__main__":
     print(">>> booting")
